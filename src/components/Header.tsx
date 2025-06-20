@@ -1,5 +1,6 @@
 import React from 'react';
-import { Search, ShoppingCart, Menu, Zap } from 'lucide-react';
+import { Search, ShoppingCart, Menu, Zap, LogIn, User } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface HeaderProps {
   cartItemsCount: number;
@@ -7,6 +8,8 @@ interface HeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onFiltersToggle: () => void;
+  onLoginToggle: () => void;
+  onProfileToggle: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -14,8 +17,12 @@ const Header: React.FC<HeaderProps> = ({
   onCartToggle,
   searchQuery,
   onSearchChange,
-  onFiltersToggle
+  onFiltersToggle,
+  onLoginToggle,
+  onProfileToggle
 }) => {
+  const { user } = useAuth();
+
   return (
     <header className="bg-white shadow-lg border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -57,6 +64,24 @@ const Header: React.FC<HeaderProps> = ({
               <Menu className="h-4 w-4 mr-2" />
               Filters
             </button>
+
+            {user ? (
+              <button
+                onClick={onProfileToggle}
+                className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <User className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">{user.name}</span>
+              </button>
+            ) : (
+              <button
+                onClick={onLoginToggle}
+                className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <LogIn className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Sign In</span>
+              </button>
+            )}
             
             <button
               onClick={onCartToggle}

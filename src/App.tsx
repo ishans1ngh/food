@@ -1,19 +1,25 @@
 import React, { useState, useMemo } from 'react';
+import { BrowserRouter as Router } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
 import Header from './components/Header';
 import ProductCard from './components/ProductCard';
 import ShoppingCart from './components/ShoppingCart';
-import PriceComparison from './components/PriceComparison';
+import RealTimePriceComparison from './components/RealTimePriceComparison';
 import FilterModal from './components/FilterModal';
+import LoginModal from './components/auth/LoginModal';
+import RegisterModal from './components/auth/RegisterModal';
+import UserProfile from './components/UserProfile';
 import { groceryItems, generatePlatformPrices, basePrices } from './data/mockData';
-import { comparePrices } from './utils/priceComparison';
-import { GroceryItem, CartItem, FilterOptions, PriceComparisonResult } from './types';
+import { GroceryItem, CartItem, FilterOptions } from './types';
 
-function App() {
+function AppContent() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [showPriceComparison, setShowPriceComparison] = useState(false);
-  const [comparisonResults, setComparisonResults] = useState<PriceComparisonResult[]>([]);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterOptions>({
     category: 'All Categories',
@@ -77,8 +83,6 @@ function App() {
   };
 
   const handleComparePrices = () => {
-    const results = comparePrices(cartItems);
-    setComparisonResults(results);
     setShowPriceComparison(true);
     setIsCartOpen(false);
   };
@@ -91,8 +95,8 @@ function App() {
 
   if (showPriceComparison) {
     return (
-      <PriceComparison
-        results={comparisonResults}
+      <RealTimePriceComparison
+        cartItems={cartItems}
         onClose={() => setShowPriceComparison(false)}
       />
     );
@@ -106,6 +110,8 @@ function App() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onFiltersToggle={() => setIsFiltersOpen(true)}
+        onLoginToggle={() => setIsLoginOpen(true)}
+        onProfileToggle={() => setIsProfileOpen(true)}
       />
 
       {/* Hero Section */}
@@ -117,20 +123,20 @@ function App() {
             </h1>
             <p className="text-xl md:text-2xl text-emerald-100 mb-8 max-w-3xl mx-auto">
               Find the best prices across all major grocery platforms in one place. 
-              Add items to your cart and let us do the comparison for you.
+              Add items to your cart and let us do the real-time comparison for you.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6">
               <div className="flex items-center space-x-2 text-emerald-100">
                 <span className="w-2 h-2 bg-emerald-300 rounded-full"></span>
-                <span>Compare across 5+ platforms</span>
+                <span>Real-time API integration</span>
               </div>
               <div className="flex items-center space-x-2 text-emerald-100">
                 <span className="w-2 h-2 bg-emerald-300 rounded-full"></span>
-                <span>Real-time price updates</span>
+                <span>7+ platforms compared</span>
               </div>
               <div className="flex items-center space-x-2 text-emerald-100">
                 <span className="w-2 h-2 bg-emerald-300 rounded-full"></span>
-                <span>Best deal recommendations</span>
+                <span>Secure user accounts</span>
               </div>
             </div>
           </div>
@@ -189,8 +195,8 @@ function App() {
                 <h3 className="text-2xl font-bold">SmartBasket</h3>
               </div>
               <p className="text-gray-400 mb-4 max-w-md">
-                Your intelligent grocery shopping companion. Compare prices across all major platforms 
-                and save money on every purchase.
+                Your intelligent grocery shopping companion with real-time price comparison 
+                and secure user authentication. Save money on every purchase.
               </p>
               <div className="text-sm text-gray-500">
                 © 2024 SmartBasket. All rights reserved.
@@ -205,17 +211,19 @@ function App() {
                 <li>🏪 JioMart</li>
                 <li>⚡ Blinkit</li>
                 <li>📦 Flipkart Grocery</li>
+                <li>🚀 Zepto</li>
+                <li>🍽️ Swiggy Instamart</li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-semibold mb-4">Features</h4>
               <ul className="space-y-2 text-gray-400 text-sm">
-                <li>Real-time price comparison</li>
-                <li>Best deal recommendations</li>
-                <li>Smart shopping lists</li>
-                <li>Delivery time tracking</li>
-                <li>Discount alerts</li>
+                <li>Real-time API integration</li>
+                <li>Secure authentication</li>
+                <li>Price history tracking</li>
+                <li>Personal watchlists</li>
+                <li>Smart recommendations</li>
               </ul>
             </div>
           </div>
@@ -238,7 +246,40 @@ function App() {
         filters={filters}
         onApplyFilters={handleApplyFilters}
       />
+
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        onSwitchToRegister={() => {
+          setIsLoginOpen(false);
+          setIsRegisterOpen(true);
+        }}
+      />
+
+      <RegisterModal
+        isOpen={isRegisterOpen}
+        onClose={() => setIsRegisterOpen(false)}
+        onSwitchToLogin={() => {
+          setIsRegisterOpen(false);
+          setIsLoginOpen(true);
+        }}
+      />
+
+      <UserProfile
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+      />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
   );
 }
 
