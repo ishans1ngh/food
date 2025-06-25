@@ -4,7 +4,8 @@ import axios from 'axios';
 interface User {
   id: string;
   name: string;
-  email: string;
+  phone: string;
+  email?: string;
   preferences: {
     favoriteStores: string[];
     priceAlerts: boolean;
@@ -16,13 +17,14 @@ interface User {
     targetPrice: number;
     createdAt: string;
   }>;
+  isPhoneVerified: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  sendOTP: (phone: string, purpose: 'login' | 'register') => Promise<void>;
+  verifyOTP: (phone: string, otp: string, purpose: 'login' | 'register', name?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
   updateProfile: (data: Partial<User>) => Promise<void>;
@@ -93,29 +95,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loadUser();
   }, [token]);
 
-  const login = async (email: string, password: string) => {
+  const sendOTP = async (phone: string, purpose: 'login' | 'register') => {
     try {
-      const response = await axios.post('/auth/login', { email, password });
-      const { token: newToken, user: userData } = response.data;
-      
-      localStorage.setItem('token', newToken);
-      setToken(newToken);
-      setUser(userData);
+      const response = await axios.post('/auth/send-otp', { phone, purpose });
+      return response.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Login failed');
+      throw new Error(error.response?.data?.message || 'Failed to send OTP');
     }
   };
 
-  const register = async (name: string, email: string, password: string) => {
+  const verifyOTP = async (phone: string, otp: string, purpose: 'login' | 'register', name?: string) => {
     try {
-      const response = await axios.post('/auth/register', { name, email, password });
+      const response = await axios.post('/auth/verify-otp', { phone, otp, purpose, name });
       const { token: newToken, user: userData } = response.data;
       
       localStorage.setItem('token', newToken);
       setToken(newToken);
       setUser(userData);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Registration failed');
+      throw new Error(error.response?.data?.message || 'OTP verification failed');
     }
   };
 
@@ -137,8 +135,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value = {
     user,
     token,
-    login,
-    register,
+    sendOTP,
+    verifyOTP,
     logout,
     loading,
     updateProfile

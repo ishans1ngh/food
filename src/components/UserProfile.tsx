@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Settings, Heart, Bell, DollarSign, Save } from 'lucide-react';
+import { X, User, Settings, Heart, Bell, DollarSign, Save, Phone, Mail } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface UserProfileProps {
@@ -13,6 +13,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => {
   const [message, setMessage] = useState('');
   const [formData, setFormData] = useState({
     name: user?.name || '',
+    email: user?.email || '',
     favoriteStores: user?.preferences.favoriteStores || [],
     priceAlerts: user?.preferences.priceAlerts || true,
     maxBudget: user?.preferences.maxBudget || 5000
@@ -37,6 +38,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => {
     try {
       await updateProfile({
         name: formData.name,
+        email: formData.email,
         preferences: {
           favoriteStores: formData.favoriteStores,
           priceAlerts: formData.priceAlerts,
@@ -109,17 +111,39 @@ const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => {
                     required
                   />
                 </div>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Address
+                    Phone Number
                   </label>
-                  <input
-                    type="email"
-                    value={user.email}
-                    disabled
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="tel"
+                      value={`+91 ${user.phone}`}
+                      disabled
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {user.isPhoneVerified ? '✅ Verified' : '❌ Not verified'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address (Optional)
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      placeholder="Enter your email"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -158,7 +182,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ isOpen, onClose }) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-sm font-medium text-gray-700">Price Alerts</label>
-                    <p className="text-xs text-gray-500">Get notified when prices drop</p>
+                    <p className="text-xs text-gray-500">Get SMS notifications when prices drop</p>
                   </div>
                   <input
                     type="checkbox"

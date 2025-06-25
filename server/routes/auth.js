@@ -1,95 +1,174 @@
 import express from 'express';
 import User from '../models/User.js';
+import OTP from '../models/OTP.js';
 import { generateToken, authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Register new user
-router.post('/register', async (req, res) => {
+// Generate OTP for phone number
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Mock SMS service (in production, use services like Twilio, AWS SNS, etc.)
+const sendSMS = async (phone, otp) => {
+  console.log(`📱 SMS to ${phone}: Your SmartBasket OTP is ${otp}. Valid for 5 minutes.`);
+  // In production, integrate with actual SMS service
+  return true;
+};
+
+// Send OTP to phone number
+router.post('/send-otp', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { phone, purpose = 'login' } = req.body;
 
-    // Validation
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'All fields are required' });
+    // Validate phone number
+    if (!phone || !/^[6-9]\d{9}$/.test(phone)) {
+      return res.status(400).json({ message: 'Please enter a valid 10-digit Indian mobile number' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    // Check if user exists for login, or doesn't exist for register
+    const existingUser = await User.findOne({ phone });
+    
+    if (purpose === 'register' && existingUser) {
+      return res.status(400).json({ message: 'User already exists with this phone number' });
+    }
+    
+    if (purpose === 'login' && !existingUser) {
+      return res.status(400).json({ message: 'No account found with this phone number' });
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists with this email' });
+    // Check for recent OTP requests (rate limiting)
+    const recentOTP = await OTP.findOne({
+      phone,
+      createdAt: { $gte: new Date(Date.now() - 60000) } // 1 minute
+    });
+
+    if (recentOTP) {
+      return res.status(429).json({ 
+        message: 'Please wait before requesting another OTP',
+        retryAfter: 60 - Math.floor((Date.now() - recentOTP.createdAt) / 1000)
+      });
     }
 
-    // Create new user
-    const user = new User({ name, email, password });
-    await user.save();
+    // Generate and save OTP
+    const otp = generateOTP();
+    const otpDoc = new OTP({
+      phone,
+      otp,
+      purpose,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+    });
 
-    // Generate token
-    const token = generateToken(user._id);
+    await otpDoc.save();
 
-    res.status(201).json({
-      message: 'User registered successfully',
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        preferences: user.preferences
-      }
+    // Send SMS (mock implementation)
+    await sendSMS(phone, otp);
+
+    res.json({
+      message: 'OTP sent successfully',
+      phone,
+      expiresIn: 300 // 5 minutes in seconds
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ message: 'Registration failed', error: error.message });
+    console.error('Send OTP error:', error);
+    res.status(500).json({ message: 'Failed to send OTP', error: error.message });
   }
 });
 
-// Login user
-router.post('/login', async (req, res) => {
+// Verify OTP and login/register
+router.post('/verify-otp', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { phone, otp, purpose = 'login', name } = req.body;
 
-    // Validation
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' });
+    // Validate input
+    if (!phone || !otp) {
+      return res.status(400).json({ message: 'Phone number and OTP are required' });
     }
 
-    // Find user
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      return res.status(400).json({ message: 'Please enter a valid 10-digit Indian mobile number' });
     }
 
-    // Check password
-    const isPasswordValid = await user.comparePassword(password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ message: 'OTP must be 6 digits' });
     }
 
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    // Find valid OTP
+    const otpDoc = await OTP.findOne({
+      phone,
+      otp,
+      purpose,
+      isUsed: false,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!otpDoc) {
+      // Increment attempts for existing OTP
+      await OTP.updateOne(
+        { phone, purpose, isUsed: false },
+        { $inc: { attempts: 1 } }
+      );
+      
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
+    // Check attempts
+    if (otpDoc.attempts >= 3) {
+      return res.status(400).json({ message: 'Too many failed attempts. Please request a new OTP' });
+    }
+
+    // Mark OTP as used
+    otpDoc.isUsed = true;
+    await otpDoc.save();
+
+    let user;
+
+    if (purpose === 'register') {
+      // Validate name for registration
+      if (!name || name.trim().length < 2) {
+        return res.status(400).json({ message: 'Name is required and must be at least 2 characters' });
+      }
+
+      // Create new user
+      user = new User({
+        name: name.trim(),
+        phone,
+        isPhoneVerified: true
+      });
+      await user.save();
+    } else {
+      // Find existing user for login
+      user = await User.findOne({ phone });
+      if (!user) {
+        return res.status(400).json({ message: 'User not found' });
+      }
+
+      // Update last login and verify phone
+      user.lastLogin = new Date();
+      user.isPhoneVerified = true;
+      await user.save();
+    }
 
     // Generate token
     const token = generateToken(user._id);
 
     res.json({
-      message: 'Login successful',
+      message: purpose === 'register' ? 'Account created successfully' : 'Login successful',
       token,
       user: {
         id: user._id,
         name: user.name,
+        phone: user.phone,
         email: user.email,
         preferences: user.preferences,
+        isPhoneVerified: user.isPhoneVerified,
         lastLogin: user.lastLogin
       }
     });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Login failed', error: error.message });
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ message: 'OTP verification failed', error: error.message });
   }
 });
 
@@ -100,9 +179,11 @@ router.get('/profile', authenticateToken, async (req, res) => {
       user: {
         id: req.user._id,
         name: req.user.name,
+        phone: req.user.phone,
         email: req.user.email,
         preferences: req.user.preferences,
         savedItems: req.user.savedItems,
+        isPhoneVerified: req.user.isPhoneVerified,
         lastLogin: req.user.lastLogin,
         createdAt: req.user.createdAt
       }
@@ -116,10 +197,11 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // Update user profile
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const { name, preferences } = req.body;
+    const { name, email, preferences } = req.body;
     const user = req.user;
 
     if (name) user.name = name;
+    if (email) user.email = email;
     if (preferences) {
       user.preferences = { ...user.preferences, ...preferences };
     }
@@ -131,8 +213,10 @@ router.put('/profile', authenticateToken, async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        phone: user.phone,
         email: user.email,
-        preferences: user.preferences
+        preferences: user.preferences,
+        isPhoneVerified: user.isPhoneVerified
       }
     });
   } catch (error) {
@@ -144,7 +228,6 @@ router.put('/profile', authenticateToken, async (req, res) => {
 // Logout (client-side token removal, but we can track it)
 router.post('/logout', authenticateToken, async (req, res) => {
   try {
-    // In a more sophisticated setup, you might want to blacklist the token
     res.json({ message: 'Logout successful' });
   } catch (error) {
     console.error('Logout error:', error);
