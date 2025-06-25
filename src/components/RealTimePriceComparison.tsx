@@ -80,7 +80,7 @@ const RealTimePriceComparison: React.FC<RealTimePriceComparisonProps> = ({ cartI
         quantity: item.quantity
       }));
 
-      const response = await axios.post('/prices/compare', { items });
+      const response = await axios.post('/api/prices/compare', { items });
       setComparisonData(response.data);
       setLastUpdated(new Date());
     } catch (error: any) {
